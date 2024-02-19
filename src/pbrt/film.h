@@ -135,7 +135,7 @@ class VisibleSurface {
   public:
     // VisibleSurface Public Methods
     PBRT_CPU_GPU
-    VisibleSurface(const SurfaceInteraction &si, SampledSpectrum albedo,
+    VisibleSurface(const SurfaceInteraction &si, SampledReflectance albedo,
                    const SampledWavelengths &lambda);
 
     PBRT_CPU_GPU
@@ -151,7 +151,7 @@ class VisibleSurface {
     Point2f uv;
     Float time = 0;
     Vector3f dpdx, dpdy;
-    SampledSpectrum albedo;
+    SampledReflectance albedo;
     bool set = false;
 };
 

@@ -35,7 +35,7 @@ class BSDF {
     Vector3f LocalToRender(Vector3f v) const { return shadingFrame.FromLocal(v); }
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f woRender, Vector3f wiRender,
+    SampledReflectance f(Vector3f woRender, Vector3f wiRender,
                       TransportMode mode = TransportMode::Radiance) const {
         Vector3f wi = RenderToLocal(wiRender), wo = RenderToLocal(woRender);
         if (wo.z == 0)
@@ -44,7 +44,7 @@ class BSDF {
     }
 
     template <typename BxDF>
-    PBRT_CPU_GPU SampledSpectrum f(Vector3f woRender, Vector3f wiRender,
+    PBRT_CPU_GPU SampledReflectance f(Vector3f woRender, Vector3f wiRender,
                                    TransportMode mode = TransportMode::Radiance) const {
         Vector3f wi = RenderToLocal(wiRender), wo = RenderToLocal(woRender);
         if (wo.z == 0)
@@ -131,12 +131,12 @@ class BSDF {
     std::string ToString() const;
 
     PBRT_CPU_GPU
-    SampledSpectrum rho(pstd::span<const Point2f> u1, pstd::span<const Float> uc,
+    SampledReflectance rho(pstd::span<const Point2f> u1, pstd::span<const Float> uc,
                         pstd::span<const Point2f> u2) const {
         return bxdf.rho(u1, uc, u2);
     }
     PBRT_CPU_GPU
-    SampledSpectrum rho(Vector3f woRender, pstd::span<const Float> uc,
+    SampledReflectance rho(Vector3f woRender, pstd::span<const Float> uc,
                         pstd::span<const Point2f> u) const {
         Vector3f wo = RenderToLocal(woRender);
         return bxdf.rho(wo, uc, u);

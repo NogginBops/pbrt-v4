@@ -637,6 +637,7 @@ SET (PBRT_UTIL_SOURCE
   src/pbrt/util/print.cpp
   src/pbrt/util/progressreporter.cpp
   src/pbrt/util/pstd.cpp
+  src/pbrt/util/reflectance.cpp
   src/pbrt/util/rng.cpp
   src/pbrt/util/sampling.cpp
   src/pbrt/util/scattering.cpp
@@ -678,6 +679,7 @@ SET (PBRT_UTIL_SOURCE_HEADERS
   src/pbrt/util/print.h
   src/pbrt/util/progressreporter.h
   src/pbrt/util/pstd.h
+  src/pbrt/util/reflectance.h
   src/pbrt/util/rng.h
   src/pbrt/util/sampling.h
   src/pbrt/util/scattering.h
@@ -751,6 +753,7 @@ if (PBRT_CUDA_ENABLED)
 #   src/pbrt/util/print.cpp
 #   src/pbrt/util/progressreporter.cpp
    src/pbrt/util/pstd.cpp
+   src/pbrt/util/reflectance.cpp
    src/pbrt/util/rng.cpp
    src/pbrt/util/sampling.cpp
    src/pbrt/util/scattering.cpp

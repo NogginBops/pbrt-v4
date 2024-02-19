@@ -465,7 +465,7 @@ class DiffuseMaterial {
     PBRT_CPU_GPU DiffuseBxDF GetBxDF(TextureEvaluator texEval, MaterialEvalContext ctx,
                                      SampledWavelengths &lambda) const {
         SampledSpectrum r = Clamp(texEval(reflectance, ctx, lambda), 0, 1);
-        return DiffuseBxDF(r);
+        return DiffuseBxDF(SampledReflectance(r));
     }
 
   private:

@@ -9,6 +9,7 @@
 
 #include <pbrt/util/pstd.h>
 #include <pbrt/util/spectrum.h>
+#include <pbrt/util/reflectance.h>
 #include <pbrt/util/taggedptr.h>
 #include <pbrt/util/vecmath.h>
 
@@ -52,6 +53,8 @@ enum BxDFFlags {
     Diffuse = 1 << 2,
     Glossy = 1 << 3,
     Specular = 1 << 4,
+    // FIXME: Figure out if we can use this...?
+    // Fluorescent = 1 << 5,
     // Composite _BxDFFlags_ definitions
     DiffuseReflection = Diffuse | Reflection,
     DiffuseTransmission = Diffuse | Transmission,
@@ -122,7 +125,8 @@ struct BSDFSample {
     // BSDFSample Public Methods
     BSDFSample() = default;
     PBRT_CPU_GPU
-    BSDFSample(SampledSpectrum f, Vector3f wi, Float pdf, BxDFFlags flags, Float eta = 1,
+    BSDFSample(SampledReflectance f, Vector3f wi, Float pdf, BxDFFlags flags,
+               Float eta = 1,
                bool pdfIsProportional = false)
         : f(f),
           wi(wi),
@@ -143,7 +147,7 @@ struct BSDFSample {
     bool IsSpecular() const { return pbrt::IsSpecular(flags); }
 
     std::string ToString() const;
-    SampledSpectrum f;
+    SampledReflectance f;
     Vector3f wi;
     Float pdf = 0;
     BxDFFlags flags;
@@ -175,7 +179,7 @@ class BxDF
 
     std::string ToString() const;
 
-    PBRT_CPU_GPU inline SampledSpectrum f(Vector3f wo, Vector3f wi,
+    PBRT_CPU_GPU inline SampledReflectance f(Vector3f wo, Vector3f wi,
                                           TransportMode mode) const;
 
     PBRT_CPU_GPU inline pstd::optional<BSDFSample> Sample_f(
@@ -187,9 +191,9 @@ class BxDF
         BxDFReflTransFlags sampleFlags = BxDFReflTransFlags::All) const;
 
     PBRT_CPU_GPU
-    SampledSpectrum rho(Vector3f wo, pstd::span<const Float> uc,
+    SampledReflectance rho(Vector3f wo, pstd::span<const Float> uc,
                         pstd::span<const Point2f> u2) const;
-    SampledSpectrum rho(pstd::span<const Point2f> u1, pstd::span<const Float> uc2,
+    SampledReflectance rho(pstd::span<const Point2f> u1, pstd::span<const Float> uc2,
                         pstd::span<const Point2f> u2) const;
 
     PBRT_CPU_GPU inline void Regularize();

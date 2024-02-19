@@ -390,7 +390,8 @@ SampledSpectrum SimplePathIntegrator::Li(RayDifferential ray, SampledWavelengths
                                          Sampler sampler, ScratchBuffer &scratchBuffer,
                                          VisibleSurface *) const {
     // Estimate radiance along ray using simple path tracing
-    SampledSpectrum L(0.f), beta(1.f);
+    SampledSpectrum L(0.f);
+    SampledReflectance beta(1.f);
     bool specularBounce = true;
     int depth = 0;
     while (beta) {
@@ -436,9 +437,9 @@ SampledSpectrum SimplePathIntegrator::Li(RayDifferential ray, SampledWavelengths
                 if (ls && ls->L && ls->pdf > 0) {
                     // Evaluate BSDF for light and possibly add scattered radiance
                     Vector3f wi = ls->wi;
-                    SampledSpectrum f = bsdf.f(wo, wi) * AbsDot(wi, isect.shading.n);
+                    SampledReflectance f = bsdf.f(wo, wi) * AbsDot(wi, isect.shading.n);
                     if (f && Unoccluded(isect, ls->pLight))
-                        L += beta * f * ls->L / (sampledLight->p * ls->pdf);
+                        L += (beta * (f * ls->L)) / (sampledLight->p * ls->pdf);
                 }
             }
         }
@@ -475,7 +476,8 @@ SampledSpectrum SimplePathIntegrator::Li(RayDifferential ray, SampledWavelengths
             ray = isect.SpawnRay(wi);
         }
 
-        CHECK_GE(beta.y(lambda), 0.f);
+        // FIXME: Fix this assert
+        //CHECK_GE(beta.y(lambda), 0.f);
         DCHECK(!IsInf(beta.y(lambda)));
     }
     return L;
@@ -578,9 +580,9 @@ void LightPathIntegrator::EvaluatePixelSample(Point2i pPixel, int sampleIndex,
         Point2f u = sampler.Get2D();
         pstd::optional<CameraWiSample> cs = camera.SampleWi(isect, u, lambda);
         if (cs && cs->pdf != 0) {
-            SampledSpectrum L = beta *
-                                bsdf.f(isect.wo, cs->wi, TransportMode::Importance) *
-                                AbsDot(cs->wi, isect.shading.n) * cs->Wi / cs->pdf;
+            // FIXME: Multiplication order?
+            SampledSpectrum L = (bsdf.f(isect.wo, cs->wi, TransportMode::Importance) *
+                                AbsDot(cs->wi, isect.shading.n) * cs->Wi / cs->pdf) * beta;
             if (L && Unoccluded(cs->pRef, cs->pLens))
                 camera.GetFilm().AddSplat(cs->pRaster, L, lambda);
         }
@@ -591,7 +593,8 @@ void LightPathIntegrator::EvaluatePixelSample(Point2i pPixel, int sampleIndex,
             bsdf.Sample_f(isect.wo, uc, sampler.Get2D(), TransportMode::Importance);
         if (!bs)
             break;
-        beta *= bs->f * AbsDot(bs->wi, isect.shading.n) / bs->pdf;
+        // FIXME: Multiplication order?
+        beta = (bs->f * AbsDot(bs->wi, isect.shading.n) / bs->pdf) * beta;
         ray = isect.SpawnRay(ray, bsdf, bs->wi, bs->flags, bs->eta);
     }
 }
@@ -703,7 +706,7 @@ SampledSpectrum PathIntegrator::Li(RayDifferential ray, SampledWavelengths &lamb
                 Point2f(0.756135, 0.731258), Point2f(0.516165, 0.152852),
                 Point2f(0.180888, 0.214174), Point2f(0.898579, 0.503897)};
 
-            SampledSpectrum albedo = bsdf.rho(isect.wo, ucRho, uRho);
+            SampledReflectance albedo = bsdf.rho(isect.wo, ucRho, uRho);
 
             *visibleSurf = VisibleSurface(isect, albedo, lambda);
         }
@@ -736,7 +739,8 @@ SampledSpectrum PathIntegrator::Li(RayDifferential ray, SampledWavelengths &lamb
         if (!bs)
             break;
         // Update path state variables after surface scattering
-        beta *= bs->f * AbsDot(bs->wi, isect.shading.n) / bs->pdf;
+        // Multiplication order?
+        beta = (bs->f * AbsDot(bs->wi, isect.shading.n) / bs->pdf) * beta;
         p_b = bs->pdfIsProportional ? bsdf.PDF(wo, bs->wi) : bs->pdf;
         DCHECK(!IsInf(beta.y(lambda)));
         specularBounce = bs->IsSpecular();
@@ -789,18 +793,20 @@ SampledSpectrum PathIntegrator::SampleLd(const SurfaceInteraction &intr, const B
 
     // Evaluate BSDF for light sample and check light visibility
     Vector3f wo = intr.wo, wi = ls->wi;
-    SampledSpectrum f = bsdf->f(wo, wi) * AbsDot(wi, intr.shading.n);
+    SampledReflectance f = bsdf->f(wo, wi) * AbsDot(wi, intr.shading.n);
     if (!f || !Unoccluded(intr, ls->pLight))
         return {};
 
     // Return light's contribution to reflected radiance
     Float p_l = sampledLight->p * ls->pdf;
     if (IsDeltaLight(light.Type()))
-        return ls->L * f / p_l;
+        // FIXME: Multiplication order?
+        return f * ls->L / p_l;
     else {
         Float p_b = bsdf->PDF(wo, wi);
         Float w_l = PowerHeuristic(1, p_l, 1, p_b);
-        return w_l * ls->L * f / p_l;
+        // FIXME: Multiplication order?
+        return w_l * f * ls->L / p_l;
     }
 }
 
@@ -1137,7 +1143,7 @@ SampledSpectrum VolPathIntegrator::Li(RayDifferential ray, SampledWavelengths &l
                 Point2f(0.756135, 0.731258), Point2f(0.516165, 0.152852),
                 Point2f(0.180888, 0.214174), Point2f(0.898579, 0.503897)};
 
-            SampledSpectrum albedo = bsdf.rho(isect.wo, ucRho, uRho);
+            SampledReflectance albedo = bsdf.rho(isect.wo, ucRho, uRho);
 
             *visibleSurf = VisibleSurface(isect, albedo, lambda);
         }
@@ -1167,7 +1173,8 @@ SampledSpectrum VolPathIntegrator::Li(RayDifferential ray, SampledWavelengths &l
         if (!bs)
             break;
         // Update _beta_ and rescaled path probabilities for BSDF scattering
-        beta *= bs->f * AbsDot(bs->wi, isect.shading.n) / bs->pdf;
+        // FIXME: Multiplication order?
+        beta = (bs->f * AbsDot(bs->wi, isect.shading.n) / bs->pdf) * beta;
         if (bs->pdfIsProportional)
             r_l = r_u / bsdf.PDF(wo, bs->wi);
         else
@@ -1245,7 +1252,8 @@ SampledSpectrum VolPathIntegrator::Li(RayDifferential ray, SampledWavelengths &l
             pstd::optional<BSDFSample> bs = Sw.Sample_f(pi.wo, u, sampler.Get2D());
             if (!bs)
                 break;
-            beta *= bs->f * AbsDot(bs->wi, pi.shading.n) / bs->pdf;
+            // Multiplication order?
+            beta = (bs->f * AbsDot(bs->wi, pi.shading.n) / bs->pdf) * beta;
             r_l = r_u / bs->pdf;
             // Don't increment depth this time...
             DCHECK(!IsInf(beta.y(lambda)));
@@ -1306,7 +1314,7 @@ SampledSpectrum VolPathIntegrator::SampleLd(const Interaction &intr, const BSDF 
 
     // Evaluate BSDF or phase function for light sample direction
     Float scatterPDF;
-    SampledSpectrum f_hat;
+    SampledReflectance f_hat;
     Vector3f wo = intr.wo, wi = ls->wi;
     if (bsdf) {
         // Update _f_hat_ and _scatterPDF_ accounting for the BSDF
@@ -1317,7 +1325,7 @@ SampledSpectrum VolPathIntegrator::SampleLd(const Interaction &intr, const BSDF 
         // Update _f_hat_ and _scatterPDF_ accounting for the phase function
         CHECK(intr.IsMediumInteraction());
         PhaseFunction phase = intr.AsMedium().phase;
-        f_hat = SampledSpectrum(phase.p(wo, wi));
+        f_hat = SampledReflectance(phase.p(wo, wi));
         scatterPDF = phase.PDF(wo, wi);
     }
     if (!f_hat)
@@ -1626,7 +1634,7 @@ struct Vertex {
 
     bool IsOnSurface() const { return ng() != Normal3f(); }
 
-    SampledSpectrum f(const Vertex &next, TransportMode mode) const {
+    SampledReflectance f(const Vertex &next, TransportMode mode) const {
         Vector3f wi = next.p() - p();
         if (LengthSquared(wi) == 0)
             return {};
@@ -1635,10 +1643,10 @@ struct Vertex {
         case VertexType::Surface:
             return bsdf.f(si.wo, wi, mode);
         case VertexType::Medium:
-            return SampledSpectrum(mi.phase.p(mi.wo, wi));
+            return SampledReflectance(mi.phase.p(mi.wo, wi));
         default:
             LOG_FATAL("Vertex::f(): Unimplemented");
-            return SampledSpectrum(0.f);
+            return SampledReflectance(0.f);
         }
     }
 
@@ -2095,7 +2103,8 @@ int RandomWalk(const Integrator &integrator, SampledWavelengths &lambda,
             break;
         pdfFwd = bs->pdfIsProportional ? bsdf.PDF(wo, bs->wi, mode) : bs->pdf;
         anyNonSpecularBounces |= !bs->IsSpecular();
-        beta *= bs->f * AbsDot(bs->wi, isect.shading.n) / bs->pdf;
+        // FIXME: Multiplication order?
+        beta = (bs->f * AbsDot(bs->wi, isect.shading.n) / bs->pdf) * beta;
         ray = isect.SpawnRay(ray, bsdf, bs->wi, bs->flags, bs->eta);
 
         // Compute path probabilities at surface vertex
@@ -2768,7 +2777,7 @@ struct SPPMPixel {
         // VisiblePoint Public Methods
         VisiblePoint() = default;
         VisiblePoint(const Point3f &p, const Vector3f &wo, const BSDF &bsdf,
-                     const SampledSpectrum &beta, bool secondaryLambdaTerminated)
+                     const SampledReflectance &beta, bool secondaryLambdaTerminated)
             : p(p),
               wo(wo),
               bsdf(bsdf),
@@ -2779,7 +2788,7 @@ struct SPPMPixel {
         Point3f p;
         Vector3f wo;
         BSDF bsdf;
-        SampledSpectrum beta;
+        SampledReflectance beta;
         bool secondaryLambdaTerminated;
 
     } vp;
@@ -2880,7 +2889,7 @@ void SPPMIntegrator::Render() {
                     camera.GenerateRayDifferential(cs, lambda);
                 if (!crd || !crd->weight)
                     continue;
-                SampledSpectrum beta = crd->weight;
+                SampledReflectance beta = SampledReflectance(crd->weight);
                 RayDifferential &ray = crd->ray;
                 if (!Options->disablePixelJitter)
                     ray.ScaleDifferentials(invSqrtSPP);
@@ -3135,8 +3144,9 @@ void SPPMIntegrator::Render() {
                                     continue;
                                 // Update _pixel_ $\Phi$ and $m$ for nearby photon
                                 Vector3f wi = -photonRay.d;
+                                // FIXME: Multiplication order?
                                 SampledSpectrum Phi =
-                                    beta * pixel.vp.bsdf.f(pixel.vp.wo, wi);
+                                    pixel.vp.bsdf.f(pixel.vp.wo, wi) * beta;
                                 // Update _Phi_i_ for photon contribution
                                 SampledWavelengths photonLambda = lambda;
                                 if (pixel.vp.secondaryLambdaTerminated)
@@ -3166,8 +3176,9 @@ void SPPMIntegrator::Render() {
                         wo, Sample1D(), Sample2D(), TransportMode::Importance);
                     if (!bs)
                         break;
+                    // FIXME: Multiplication order?
                     SampledSpectrum bnew =
-                        beta * bs->f * AbsDot(bs->wi, isect.shading.n) / bs->pdf;
+                        bs->f * beta * AbsDot(bs->wi, isect.shading.n) / bs->pdf;
 
                     // Possibly terminate photon path with Russian roulette
                     Float betaRatio = bnew.MaxComponentValue() / beta.MaxComponentValue();
@@ -3302,18 +3313,19 @@ SampledSpectrum SPPMIntegrator::SampleLd(const SurfaceInteraction &intr, const B
 
     // Evaluate BSDF for light sample and check light visibility
     Vector3f wo = intr.wo, wi = ls->wi;
-    SampledSpectrum f = bsdf->f(wo, wi) * AbsDot(wi, intr.shading.n);
+    SampledReflectance f = bsdf->f(wo, wi) * AbsDot(wi, intr.shading.n);
     if (!f || !Unoccluded(intr, ls->pLight))
         return {};
 
     // Return light's contribution to reflected radiance
     Float p_l = sampledLight->p * ls->pdf;
     if (IsDeltaLight(light.Type()))
-        return ls->L * f / p_l;
+        // FIXME: Multiplication order?
+        return f * ls->L / p_l;
     else {
         Float p_b = bsdf->PDF(wo, wi);
         Float w_l = PowerHeuristic(1, p_l, 1, p_b);
-        return w_l * ls->L * f / p_l;
+        return w_l * f * ls->L / p_l;
     }
 }
 

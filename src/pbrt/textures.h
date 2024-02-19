@@ -1149,6 +1149,7 @@ class UniversalTextureEvaluator {
     PBRT_CPU_GPU
     Float operator()(FloatTexture tex, TextureEvalContext ctx);
 
+    // FIXME: Maybe make this return a sampled reflectance instead?
     PBRT_CPU_GPU
     SampledSpectrum operator()(SpectrumTexture tex, TextureEvalContext ctx,
                                SampledWavelengths lambda);

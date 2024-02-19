@@ -93,7 +93,8 @@ pstd::optional<BSDFSample> DielectricBxDF::Sample_f(
             // Sample perfect specular dielectric BRDF
             Vector3f wi(-wo.x, -wo.y, wo.z);
             SampledSpectrum fr(R / AbsCosTheta(wi));
-            return BSDFSample(fr, wi, pr / (pr + pt), BxDFFlags::SpecularReflection);
+            return BSDFSample(SampledReflectance(fr), wi, pr / (pr + pt),
+                              BxDFFlags::SpecularReflection);
 
         } else {
             // Sample perfect specular dielectric BTDF
@@ -110,7 +111,8 @@ pstd::optional<BSDFSample> DielectricBxDF::Sample_f(
             if (mode == TransportMode::Radiance)
                 ft /= Sqr(etap);
 
-            return BSDFSample(ft, wi, pt / (pr + pt), BxDFFlags::SpecularTransmission,
+            return BSDFSample(SampledReflectance(ft), wi, pt / (pr + pt),
+                              BxDFFlags::SpecularTransmission,
                               etap);
         }
 
@@ -140,7 +142,7 @@ pstd::optional<BSDFSample> DielectricBxDF::Sample_f(
             DCHECK(!IsNaN(pdf));
             SampledSpectrum f(mfDistrib.D(wm) * mfDistrib.G(wo, wi) * R /
                               (4 * CosTheta(wi) * CosTheta(wo)));
-            return BSDFSample(f, wi, pdf, BxDFFlags::GlossyReflection);
+            return BSDFSample(SampledReflectance(f), wi, pdf, BxDFFlags::GlossyReflection);
 
         } else {
             // Sample transmission at rough dielectric interface
@@ -164,14 +166,15 @@ pstd::optional<BSDFSample> DielectricBxDF::Sample_f(
             if (mode == TransportMode::Radiance)
                 ft /= Sqr(etap);
 
-            return BSDFSample(ft, wi, pdf, BxDFFlags::GlossyTransmission, etap);
+            return BSDFSample(SampledReflectance(ft), wi, pdf,
+                              BxDFFlags::GlossyTransmission, etap);
         }
     }
 }
 
-SampledSpectrum DielectricBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+SampledReflectance DielectricBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) const {
     if (eta == 1 || mfDistrib.EffectivelySmooth())
-        return SampledSpectrum(0.f);
+        return SampledReflectance(0.f);
     // Evaluate rough dielectric BSDF
     // Compute generalized half vector _wm_
     Float cosTheta_o = CosTheta(wo), cosTheta_i = CosTheta(wi);
@@ -192,7 +195,7 @@ SampledSpectrum DielectricBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) 
     Float F = FrDielectric(Dot(wo, wm), eta);
     if (reflect) {
         // Compute reflection at rough dielectric interface
-        return SampledSpectrum(mfDistrib.D(wm) * mfDistrib.G(wo, wi) * F /
+        return SampledReflectance(mfDistrib.D(wm) * mfDistrib.G(wo, wi) * F /
                                std::abs(4 * cosTheta_i * cosTheta_o));
 
     } else {
@@ -204,7 +207,7 @@ SampledSpectrum DielectricBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) 
         if (mode == TransportMode::Radiance)
             ft /= Sqr(etap);
 
-        return SampledSpectrum(ft);
+        return SampledReflectance(ft);
     }
 }
 
@@ -300,7 +303,7 @@ HairBxDF::HairBxDF(Float h, Float eta, const SampledSpectrum &sigma_a, Float bet
     }
 }
 
-SampledSpectrum HairBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+SampledReflectance HairBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) const {
     // Compute hair coordinate system terms related to _wo_
     Float sinTheta_o = wo.x;
     Float cosTheta_o = SafeSqrt(1 - Sqr(sinTheta_o));
@@ -362,7 +365,7 @@ SampledSpectrum HairBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) const 
     if (AbsCosTheta(wi) > 0)
         fsum /= AbsCosTheta(wi);
     DCHECK(!IsInf(fsum.Average()) && !IsNaN(fsum.Average()));
-    return fsum;
+    return SampledReflectance(fsum);
 }
 
 pstd::array<Float, HairBxDF::pMax + 1> HairBxDF::ApPDF(Float cosTheta_o) const {
@@ -996,10 +999,10 @@ MeasuredBxDFData *MeasuredBxDF::BRDFDataFromFile(const std::string &filename,
 }
 
 // MeasuredBxDF Method Definitions
-SampledSpectrum MeasuredBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+SampledReflectance MeasuredBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) const {
     // Check for valid reflection configurations
     if (!SameHemisphere(wo, wi))
-        return SampledSpectrum(0);
+        return SampledReflectance(0);
     if (wo.z < 0) {
         wo = -wo;
         wi = -wi;
@@ -1008,7 +1011,7 @@ SampledSpectrum MeasuredBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) co
     // Determine half-direction vector $\wm$
     Vector3f wm = wi + wo;
     if (LengthSquared(wm) == 0)
-        return SampledSpectrum(0);
+        return SampledReflectance(0);
     wm = Normalize(wm);
 
     // Map $\wo$ and $\wm$ to the unit square $[0,\,1]^2$
@@ -1028,8 +1031,8 @@ SampledSpectrum MeasuredBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) co
             std::max<Float>(0, brdf->spectra.Evaluate(ui.p, phi_o, theta_o, lambda[i]));
 
     // Return measured BRDF value
-    return fr * brdf->ndf.Evaluate(u_wm) /
-           (4 * brdf->sigma.Evaluate(u_wo) * CosTheta(wi));
+    return SampledReflectance(fr * brdf->ndf.Evaluate(u_wm) /
+           (4 * brdf->sigma.Evaluate(u_wo) * CosTheta(wi)));
 }
 
 pstd::optional<BSDFSample> MeasuredBxDF::Sample_f(Vector3f wo, Float uc, Point2f u,
@@ -1080,7 +1083,7 @@ pstd::optional<BSDFSample> MeasuredBxDF::Sample_f(Vector3f wo, Float uc, Point2f
     if (flipWi)
         wi = -wi;
 
-    return BSDFSample(fr, wi, pdf * lum_pdf, BxDFFlags::GlossyReflection);
+    return BSDFSample(SampledReflectance(fr), wi, pdf * lum_pdf, BxDFFlags::GlossyReflection);
 }
 
 Float MeasuredBxDF::PDF(Vector3f wo, Vector3f wi, TransportMode mode,
@@ -1127,11 +1130,11 @@ std::string NormalizedFresnelBxDF::ToString() const {
 }
 
 // BxDF Method Definitions
-SampledSpectrum BxDF::rho(Vector3f wo, pstd::span<const Float> uc,
+SampledReflectance BxDF::rho(Vector3f wo, pstd::span<const Float> uc,
                           pstd::span<const Point2f> u2) const {
     if (wo.z == 0)
         return {};
-    SampledSpectrum r(0.);
+    SampledReflectance r(0.);
     DCHECK_EQ(uc.size(), u2.size());
     for (size_t i = 0; i < uc.size(); ++i) {
         // Compute estimate of $\rho_\roman{hd}$
@@ -1142,11 +1145,11 @@ SampledSpectrum BxDF::rho(Vector3f wo, pstd::span<const Float> uc,
     return r / uc.size();
 }
 
-SampledSpectrum BxDF::rho(pstd::span<const Point2f> u1, pstd::span<const Float> uc,
+SampledReflectance BxDF::rho(pstd::span<const Point2f> u1, pstd::span<const Float> uc,
                           pstd::span<const Point2f> u2) const {
     DCHECK_EQ(uc.size(), u1.size());
     DCHECK_EQ(u1.size(), u2.size());
-    SampledSpectrum r(0.f);
+    SampledReflectance r(0.f);
     for (size_t i = 0; i < uc.size(); ++i) {
         // Compute estimate of $\rho_\roman{hh}$
         Vector3f wo = SampleUniformHemisphere(u1[i]);

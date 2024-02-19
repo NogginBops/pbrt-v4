@@ -14,6 +14,8 @@
 #include <pbrt/util/math.h>
 #include <pbrt/util/memory.h>
 #include <pbrt/util/pstd.h>
+#include <pbrt/util/reflectance.h>
+#include <pbrt/util/spectrum.h>
 #include <pbrt/util/scattering.h>
 #include <pbrt/util/spectrum.h>
 #include <pbrt/util/taggedptr.h>
@@ -32,12 +34,12 @@ class DiffuseBxDF {
     // DiffuseBxDF Public Methods
     DiffuseBxDF() = default;
     PBRT_CPU_GPU
-    DiffuseBxDF(SampledSpectrum R) : R(R) {}
+    DiffuseBxDF(SampledReflectance R) : R(R) {}
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
         if (!SameHemisphere(wo, wi))
-            return SampledSpectrum(0.f);
+            return SampledReflectance(0.f);
         return R * InvPi;
     }
 
@@ -78,7 +80,7 @@ class DiffuseBxDF {
     }
 
   private:
-    SampledSpectrum R;
+    SampledReflectance R;
 };
 
 // DiffuseTransmissionBxDF Definition
@@ -90,8 +92,8 @@ class DiffuseTransmissionBxDF {
     DiffuseTransmissionBxDF(SampledSpectrum R, SampledSpectrum T) : R(R), T(T) {}
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const {
-        return SameHemisphere(wo, wi) ? (R * InvPi) : (T * InvPi);
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+        return SameHemisphere(wo, wi) ? SampledReflectance(R * InvPi) : SampledReflectance(T * InvPi);
     }
 
     PBRT_CPU_GPU
@@ -186,7 +188,7 @@ class DielectricBxDF {
         BxDFReflTransFlags sampleFlags = BxDFReflTransFlags::All) const;
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const;
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const;
     PBRT_CPU_GPU
     Float PDF(Vector3f wo, Vector3f wi, TransportMode mode,
               BxDFReflTransFlags sampleFlags = BxDFReflTransFlags::All) const;
@@ -214,8 +216,8 @@ class ThinDielectricBxDF {
     ThinDielectricBxDF(Float eta) : eta(eta) {}
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const {
-        return SampledSpectrum(0);
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+        return SampledReflectance(0);
     }
 
     PBRT_CPU_GPU
@@ -241,13 +243,13 @@ class ThinDielectricBxDF {
         if (uc < pr / (pr + pt)) {
             // Sample perfect specular dielectric BRDF
             Vector3f wi(-wo.x, -wo.y, wo.z);
-            SampledSpectrum fr(R / AbsCosTheta(wi));
+            SampledReflectance fr(R / AbsCosTheta(wi));
             return BSDFSample(fr, wi, pr / (pr + pt), BxDFFlags::SpecularReflection);
 
         } else {
             // Sample perfect specular transmission at thin dielectric interface
             Vector3f wi = -wo;
-            SampledSpectrum ft(T / AbsCosTheta(wi));
+            SampledReflectance ft(T / AbsCosTheta(wi));
             return BSDFSample(ft, wi, pt / (pr + pt), BxDFFlags::SpecularTransmission);
         }
     }
@@ -302,7 +304,7 @@ class ConductorBxDF {
             // Sample perfect specular conductor BRDF
             Vector3f wi(-wo.x, -wo.y, wo.z);
             SampledSpectrum f = FrComplex(AbsCosTheta(wi), eta, k) / AbsCosTheta(wi);
-            return BSDFSample(f, wi, 1, BxDFFlags::SpecularReflection);
+            return BSDFSample(SampledReflectance(f), wi, 1, BxDFFlags::SpecularReflection);
         }
         // Sample rough conductor BRDF
         // Sample microfacet normal $\wm$ and reflected direction $\wi$
@@ -324,11 +326,11 @@ class ConductorBxDF {
 
         SampledSpectrum f =
             mfDistrib.D(wm) * F * mfDistrib.G(wo, wi) / (4 * cosTheta_i * cosTheta_o);
-        return BSDFSample(f, wi, pdf, BxDFFlags::GlossyReflection);
+        return BSDFSample(SampledReflectance(f), wi, pdf, BxDFFlags::GlossyReflection);
     }
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
         if (!SameHemisphere(wo, wi))
             return {};
         if (mfDistrib.EffectivelySmooth())
@@ -346,7 +348,8 @@ class ConductorBxDF {
         // Evaluate Fresnel factor _F_ for conductor BRDF
         SampledSpectrum F = FrComplex(AbsDot(wo, wm), eta, k);
 
-        return mfDistrib.D(wm) * F * mfDistrib.G(wo, wi) / (4 * cosTheta_i * cosTheta_o);
+        return SampledReflectance(mfDistrib.D(wm) * F * mfDistrib.G(wo, wi) /
+               (4 * cosTheta_i * cosTheta_o));
     }
 
     PBRT_CPU_GPU
@@ -400,7 +403,7 @@ class TopOrBottomBxDF {
     }
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
         return top ? top->f(wo, wi, mode) : bottom->f(wo, wi, mode);
     }
 
@@ -474,8 +477,8 @@ class LayeredBxDF {
     }
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const {
-        SampledSpectrum f(0.);
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+        SampledReflectance f(0.);
         // Estimate _LayeredBxDF_ value _f_ using random sampling
         // Set _wo_ and _wi_ for layered BSDF evaluation
         if (twoSided && wo.z < 0) {
@@ -529,7 +532,7 @@ class LayeredBxDF {
                 continue;
 
             // Declare state for random walk through BSDF layers
-            SampledSpectrum beta = wos->f * AbsCosTheta(wos->wi) / wos->pdf;
+            SampledReflectance beta = wos->f * AbsCosTheta(wos->wi) / wos->pdf;
             Float z = enteredTop ? thickness : 0;
             Vector3f w = wos->wi;
             HGPhaseFunction phase(g);
@@ -540,8 +543,8 @@ class LayeredBxDF {
                          beta[1], beta[2], beta[3], w.x, w.y, w.z, f[0], f[1], f[2],
                          f[3]);
                 // Possibly terminate layered BSDF random walk with Russian roulette
-                if (depth > 3 && beta.MaxComponentValue() < 0.25f) {
-                    Float q = std::max<Float>(0, 1 - beta.MaxComponentValue());
+                if (depth > 3 && beta.MaxRowSum() < 0.25f) {
+                    Float q = std::max<Float>(0, 1 - beta.MaxRowSum());
                     if (r() < q)
                         break;
                     beta /= 1 - q;
@@ -569,8 +572,9 @@ class LayeredBxDF {
                         Float wt = 1;
                         if (!IsSpecular(exitInterface.Flags()))
                             wt = PowerHeuristic(1, wis->pdf, 1, phase.PDF(-w, -wis->wi));
-                        f += beta * albedo * phase.p(-w, -wis->wi) * wt *
-                             Tr(zp - exitZ, wis->wi) * wis->f / wis->pdf;
+                        // FIXME: Multiplication order?
+                        f += (beta.MulDiag(albedo) * phase.p(-w, -wis->wi) * wt *
+                             Tr(zp - exitZ, wis->wi)) * (wis->f / wis->pdf);
 
                         // Sample phase function and update layered path state
                         Point2f u{r(), r()};
@@ -585,7 +589,7 @@ class LayeredBxDF {
                         if (((z < exitZ && w.z > 0) || (z > exitZ && w.z < 0)) &&
                             !IsSpecular(exitInterface.Flags())) {
                             // Account for scattering through _exitInterface_
-                            SampledSpectrum fExit = exitInterface.f(-w, wi, mode);
+                            SampledReflectance fExit = exitInterface.f(-w, wi, mode);
                             if (fExit) {
                                 Float exitPDF = exitInterface.PDF(
                                     -w, wi, mode, BxDFReflTransFlags::Transmission);
@@ -618,7 +622,8 @@ class LayeredBxDF {
                         if (!IsSpecular(exitInterface.Flags()))
                             wt = PowerHeuristic(1, wis->pdf, 1,
                                                 nonExitInterface.PDF(-w, -wis->wi, mode));
-                        f += beta * nonExitInterface.f(-w, -wis->wi, mode) *
+                        // FIXME: Multiplciation order?
+                        f += nonExitInterface.f(-w, -wis->wi, mode) * beta *
                              AbsCosTheta(wis->wi) * wt * Tr(thickness, wis->wi) * wis->f /
                              wis->pdf;
                     }
@@ -634,7 +639,7 @@ class LayeredBxDF {
 
                     if (!IsSpecular(exitInterface.Flags())) {
                         // Add NEE contribution along direction from BSDF sample
-                        SampledSpectrum fExit = exitInterface.f(-w, wi, mode);
+                        SampledReflectance fExit = exitInterface.f(-w, wi, mode);
                         if (fExit) {
                             Float wt = 1;
                             if (!IsSpecular(nonExitInterface.Flags())) {
@@ -642,7 +647,8 @@ class LayeredBxDF {
                                     -w, wi, mode, BxDFReflTransFlags::Transmission);
                                 wt = PowerHeuristic(1, bs->pdf, 1, exitPDF);
                             }
-                            f += beta * Tr(thickness, bs->wi) * fExit * wt;
+                            // FIXME: Multiplication order?
+                            f += fExit * beta * Tr(thickness, bs->wi) * wt;
                         }
                     }
                 }
@@ -686,7 +692,7 @@ class LayeredBxDF {
         };
 
         // Declare common variables for layered BSDF sampling
-        SampledSpectrum f = bs->f * AbsCosTheta(bs->wi);
+        SampledReflectance f = bs->f * AbsCosTheta(bs->wi);
         Float pdf = bs->pdf;
         Float z = enteredTop ? thickness : 0;
         HGPhaseFunction phase(g);
@@ -694,7 +700,7 @@ class LayeredBxDF {
         for (int depth = 0; depth < maxDepth; ++depth) {
             // Follow random walk through layers to sample layered BSDF
             // Possibly terminate layered BSDF sampling with Russian Roulette
-            Float rrBeta = f.MaxComponentValue() / pdf;
+            Float rrBeta = f.MaxRowSum() / pdf;
             if (depth > 3 && rrBeta < 0.25f) {
                 Float q = std::max<Float>(0, 1 - rrBeta);
                 if (r() < q)
@@ -926,7 +932,7 @@ class HairBxDF {
     HairBxDF(Float h, Float eta, const SampledSpectrum &sigma_a, Float beta_m,
              Float beta_n, Float alpha);
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const;
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const;
     PBRT_CPU_GPU
     pstd::optional<BSDFSample> Sample_f(Vector3f wo, Float uc, Point2f u,
                                         TransportMode mode,
@@ -1031,7 +1037,7 @@ class MeasuredBxDF {
                                               Allocator alloc);
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const;
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const;
 
     PBRT_CPU_GPU
     pstd::optional<BSDFSample> Sample_f(Vector3f wo, Float uc, Point2f u,
@@ -1113,9 +1119,9 @@ class NormalizedFresnelBxDF {
     }
 
     PBRT_CPU_GPU
-    SampledSpectrum f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
         if (!SameHemisphere(wo, wi))
-            return SampledSpectrum(0.f);
+            return SampledReflectance(0.f);
         // Compute $\Sw$ factor for BSSRDF value
         Float c = 1 - 2 * FresnelMoment1(1 / eta);
         SampledSpectrum f((1 - FrDielectric(CosTheta(wi), eta)) / (c * Pi));
@@ -1124,15 +1130,15 @@ class NormalizedFresnelBxDF {
         if (mode == TransportMode::Radiance)
             f *= Sqr(eta);
 
-        return f;
+        return SampledReflectance(f);
     }
 
   private:
     Float eta;
 };
 
-inline SampledSpectrum BxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) const {
-    auto f = [&](auto ptr) -> SampledSpectrum { return ptr->f(wo, wi, mode); };
+inline SampledReflectance BxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+    auto f = [&](auto ptr) -> SampledReflectance { return ptr->f(wo, wi, mode); };
     return Dispatch(f);
 }
 

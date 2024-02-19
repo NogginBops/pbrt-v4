@@ -165,7 +165,7 @@ class RandomWalkIntegrator : public RayIntegrator {
         Vector3f wp = SampleUniformSphere(u);
 
         // Evaluate BSDF at surface for sampled direction
-        SampledSpectrum fcos = bsdf.f(wo, wp) * AbsDot(wp, isect.shading.n);
+        SampledReflectance fcos = bsdf.f(wo, wp) * AbsDot(wp, isect.shading.n);
         if (!fcos)
             return Le;
 
