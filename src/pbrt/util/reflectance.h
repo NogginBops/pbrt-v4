@@ -37,6 +37,36 @@ class SampledReflectance {
     SampledReflectance(SquareMatrix<NSpectrumSamples> m) { values = m; }
 
     PBRT_CPU_GPU
+    static SampledReflectance FromSpectrum(const SampledSpectrum& s) {
+        return SampledReflectance(s);
+    }
+
+    PBRT_CPU_GPU
+    static SampledReflectance FromFloat(const Float& f) {
+        return SampledReflectance(f);
+    }
+
+    PBRT_CPU_GPU
+    static SampledSpectrum ToSpectrum(const SampledReflectance& r)
+    {
+        SampledSpectrum s;
+#if 0
+        // Approximate the albedo of a potentially fluorescent surface?
+        for (int i = 0; i < NSpectrumSamples; i++) {
+            for (int j = 0; j < NSpectrumSamples; j++) {
+                s[i] += r.values[i][j];
+            }
+        }
+#else
+        // Take the diagonal of the reflectance matrix.
+        for (int i = 0; i < NSpectrumSamples; i++) {
+            s[i] = r.values[i][i];
+        }
+#endif
+        return s;
+    }
+
+    PBRT_CPU_GPU
     SampledReflectance operator+(const SampledReflectance& r) const {
         return values + r.values;
     }
@@ -93,6 +123,7 @@ class SampledReflectance {
         return ret;
     }
 
+    PBRT_CPU_GPU
     SampledReflectance MulDiag(const SampledSpectrum& r) {
         SampledReflectance ret = *this;
         for (int i = 0; i < NSpectrumSamples; i++) {
@@ -107,9 +138,28 @@ class SampledReflectance {
     SampledReflectance operator*(const Float f) const { return values * f; }
 
     PBRT_CPU_GPU
-    SampledReflectance operator/(const Float f) const { return values / f; }
-    
-    SampledReflectance operator/=(const Float f) { return values = values / f; }
+    SampledReflectance operator/(const Float f) { return values / f; }
+
+    PBRT_CPU_GPU
+    explicit operator bool() const {
+        for (int i = 0; i < NSpectrumSamples; i++)
+            for (int j = 0; j < NSpectrumSamples; j++)
+                if (values[i][j] != 0)
+                    return true;
+        return false;
+    }
+
+    PBRT_CPU_GPU
+    Float MaxComponentValue() const
+    {
+        Float max = -Infinity;
+        for (int i = 0; i < NSpectrumSamples; i++) {
+            for (int j = 0; j < NSpectrumSamples; j++) {
+                max = std::max(max, values[i][j]);
+            }
+        }
+        return max;
+    }
 
     // FIXME: is operator() a good idea? Will it be confusing?
     PBRT_CPU_GPU
@@ -124,40 +174,6 @@ class SampledReflectance {
         DCHECK(i >= 0 && i < NSpectrumSamples);
         DCHECK(j >= 0 && j < NSpectrumSamples);
         return values[i][j];
-    }
-
-    PBRT_CPU_GPU
-    explicit operator bool() const {
-        for (int i = 0; i < NSpectrumSamples; ++i)
-            for (int j = 0; j < NSpectrumSamples; ++j)
-                if (values[i][j] != 0)
-                    return true;
-        return false;
-    }
-
-    Float MinRowSum() const {
-        Float m = Infinity;
-        for (int i = 0; i < NSpectrumSamples; i++) {
-            Float rowSum = 0;
-            for (int j = 0; j < NSpectrumSamples; j++) {
-                rowSum += values[i][j];
-            }
-
-            m = std::min(m, rowSum);
-        }
-    }
-
-    Float MaxRowSum() const {
-        Float m = -Infinity;
-        for (int i = 0; i < NSpectrumSamples; i++) {
-            Float rowSum = 0;
-            for (int j = 0; j < NSpectrumSamples; j++) {
-                rowSum += values[i][j];
-            }
-
-            m = std::max(m, rowSum);
-        }
-        return m;
     }
 
     std::string ToString() const;

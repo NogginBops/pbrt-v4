@@ -14,8 +14,6 @@
 #include <pbrt/util/math.h>
 #include <pbrt/util/memory.h>
 #include <pbrt/util/pstd.h>
-#include <pbrt/util/reflectance.h>
-#include <pbrt/util/spectrum.h>
 #include <pbrt/util/scattering.h>
 #include <pbrt/util/spectrum.h>
 #include <pbrt/util/taggedptr.h>
@@ -34,13 +32,13 @@ class DiffuseBxDF {
     // DiffuseBxDF Public Methods
     DiffuseBxDF() = default;
     PBRT_CPU_GPU
-    DiffuseBxDF(SampledReflectance R) : R(R) {}
+    DiffuseBxDF(SampledSpectrum R) : R(R) {}
 
     PBRT_CPU_GPU
     SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
         if (!SameHemisphere(wo, wi))
             return SampledReflectance(0.f);
-        return R * InvPi;
+        return SampledReflectance::FromSpectrum(R * InvPi);
     }
 
     PBRT_CPU_GPU
@@ -80,7 +78,7 @@ class DiffuseBxDF {
     }
 
   private:
-    SampledReflectance R;
+    SampledSpectrum R;
 };
 
 // DiffuseTransmissionBxDF Definition
@@ -93,7 +91,7 @@ class DiffuseTransmissionBxDF {
 
     PBRT_CPU_GPU
     SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
-        return SameHemisphere(wo, wi) ? SampledReflectance(R * InvPi) : SampledReflectance(T * InvPi);
+        return SampledReflectance::FromSpectrum(SameHemisphere(wo, wi) ? (R * InvPi) : (T * InvPi));
     }
 
     PBRT_CPU_GPU
@@ -243,13 +241,13 @@ class ThinDielectricBxDF {
         if (uc < pr / (pr + pt)) {
             // Sample perfect specular dielectric BRDF
             Vector3f wi(-wo.x, -wo.y, wo.z);
-            SampledReflectance fr(R / AbsCosTheta(wi));
+            SampledSpectrum fr(R / AbsCosTheta(wi));
             return BSDFSample(fr, wi, pr / (pr + pt), BxDFFlags::SpecularReflection);
 
         } else {
             // Sample perfect specular transmission at thin dielectric interface
             Vector3f wi = -wo;
-            SampledReflectance ft(T / AbsCosTheta(wi));
+            SampledSpectrum ft(T / AbsCosTheta(wi));
             return BSDFSample(ft, wi, pt / (pr + pt), BxDFFlags::SpecularTransmission);
         }
     }
@@ -304,7 +302,7 @@ class ConductorBxDF {
             // Sample perfect specular conductor BRDF
             Vector3f wi(-wo.x, -wo.y, wo.z);
             SampledSpectrum f = FrComplex(AbsCosTheta(wi), eta, k) / AbsCosTheta(wi);
-            return BSDFSample(SampledReflectance(f), wi, 1, BxDFFlags::SpecularReflection);
+            return BSDFSample(f, wi, 1, BxDFFlags::SpecularReflection);
         }
         // Sample rough conductor BRDF
         // Sample microfacet normal $\wm$ and reflected direction $\wi$
@@ -326,7 +324,7 @@ class ConductorBxDF {
 
         SampledSpectrum f =
             mfDistrib.D(wm) * F * mfDistrib.G(wo, wi) / (4 * cosTheta_i * cosTheta_o);
-        return BSDFSample(SampledReflectance(f), wi, pdf, BxDFFlags::GlossyReflection);
+        return BSDFSample(f, wi, pdf, BxDFFlags::GlossyReflection);
     }
 
     PBRT_CPU_GPU
@@ -348,7 +346,7 @@ class ConductorBxDF {
         // Evaluate Fresnel factor _F_ for conductor BRDF
         SampledSpectrum F = FrComplex(AbsDot(wo, wm), eta, k);
 
-        return SampledReflectance(mfDistrib.D(wm) * F * mfDistrib.G(wo, wi) /
+        return SampledReflectance::FromSpectrum(mfDistrib.D(wm) * F * mfDistrib.G(wo, wi) /
                (4 * cosTheta_i * cosTheta_o));
     }
 
@@ -476,6 +474,7 @@ class LayeredBxDF {
         return flags;
     }
 
+    // FIXME: How do we reformulate this simulation in terms of reflectance?
     PBRT_CPU_GPU
     SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
         SampledReflectance f(0.);
@@ -543,11 +542,11 @@ class LayeredBxDF {
                          beta[1], beta[2], beta[3], w.x, w.y, w.z, f[0], f[1], f[2],
                          f[3]);
                 // Possibly terminate layered BSDF random walk with Russian roulette
-                if (depth > 3 && beta.MaxRowSum() < 0.25f) {
-                    Float q = std::max<Float>(0, 1 - beta.MaxRowSum());
+                if (depth > 3 && beta.MaxComponentValue() < 0.25f) {
+                    Float q = std::max<Float>(0, 1 - beta.MaxComponentValue());
                     if (r() < q)
                         break;
-                    beta /= 1 - q;
+                    beta = beta / (1 - q);
                     PBRT_DBG("After RR with q = %f, beta: %f %f %f %f\n", q, beta[0],
                              beta[1], beta[2], beta[3]);
                 }
@@ -572,15 +571,16 @@ class LayeredBxDF {
                         Float wt = 1;
                         if (!IsSpecular(exitInterface.Flags()))
                             wt = PowerHeuristic(1, wis->pdf, 1, phase.PDF(-w, -wis->wi));
-                        // FIXME: Multiplication order?
-                        f += (beta.MulDiag(albedo) * phase.p(-w, -wis->wi) * wt *
-                             Tr(zp - exitZ, wis->wi)) * (wis->f / wis->pdf);
+                        // FIXME: Figure out how we combine reflectance for volumes!
+                        f += beta * SampledReflectance::FromSpectrum(albedo) * phase.p(-w, -wis->wi) * wt *
+                             Tr(zp - exitZ, wis->wi) * wis->f / wis->pdf;
 
                         // Sample phase function and update layered path state
                         Point2f u{r(), r()};
                         pstd::optional<PhaseFunctionSample> ps = phase.Sample_p(-w, u);
                         if (!ps || ps->pdf == 0 || ps->wi.z == 0)
                             continue;
+                        // FIXME: This also requires volume theory to be done correctly!
                         beta *= albedo * ps->p / ps->pdf;
                         w = ps->wi;
                         z = zp;
@@ -594,6 +594,7 @@ class LayeredBxDF {
                                 Float exitPDF = exitInterface.PDF(
                                     -w, wi, mode, BxDFReflTransFlags::Transmission);
                                 Float wt = PowerHeuristic(1, ps->pdf, 1, exitPDF);
+                                // FIXME: Matrix multiplication order!
                                 f += beta * Tr(zp - exitZ, ps->wi) * fExit * wt;
                             }
                         }
@@ -611,6 +612,7 @@ class LayeredBxDF {
                         -w, uc, Point2f(r(), r()), mode, BxDFReflTransFlags::Reflection);
                     if (!bs || !bs->f || bs->pdf == 0 || bs->wi.z == 0)
                         break;
+                    // FIXME: Multiplication order?
                     beta *= bs->f * AbsCosTheta(bs->wi) / bs->pdf;
                     w = bs->wi;
 
@@ -622,8 +624,8 @@ class LayeredBxDF {
                         if (!IsSpecular(exitInterface.Flags()))
                             wt = PowerHeuristic(1, wis->pdf, 1,
                                                 nonExitInterface.PDF(-w, -wis->wi, mode));
-                        // FIXME: Multiplciation order?
-                        f += nonExitInterface.f(-w, -wis->wi, mode) * beta *
+                        // FIXME: Multiplication order?
+                        f += beta * nonExitInterface.f(-w, -wis->wi, mode) *
                              AbsCosTheta(wis->wi) * wt * Tr(thickness, wis->wi) * wis->f /
                              wis->pdf;
                     }
@@ -634,6 +636,7 @@ class LayeredBxDF {
                         -w, uc, u, mode, BxDFReflTransFlags::Reflection);
                     if (!bs || !bs->f || bs->pdf == 0 || bs->wi.z == 0)
                         break;
+                    // FIXME: Multiplication order?
                     beta *= bs->f * AbsCosTheta(bs->wi) / bs->pdf;
                     w = bs->wi;
 
@@ -648,7 +651,7 @@ class LayeredBxDF {
                                 wt = PowerHeuristic(1, bs->pdf, 1, exitPDF);
                             }
                             // FIXME: Multiplication order?
-                            f += fExit * beta * Tr(thickness, bs->wi) * wt;
+                            f += beta * Tr(thickness, bs->wi) * fExit * wt;
                         }
                     }
                 }
@@ -658,6 +661,7 @@ class LayeredBxDF {
         return f / nSamples;
     }
 
+    // FIXME: How do we reformulate this simulation in terms of reflectance?
     PBRT_CPU_GPU
     pstd::optional<BSDFSample> Sample_f(
         Vector3f wo, Float uc, Point2f u, TransportMode mode,
@@ -700,7 +704,7 @@ class LayeredBxDF {
         for (int depth = 0; depth < maxDepth; ++depth) {
             // Follow random walk through layers to sample layered BSDF
             // Possibly terminate layered BSDF sampling with Russian Roulette
-            Float rrBeta = f.MaxRowSum() / pdf;
+            Float rrBeta = f.MaxComponentValue() / pdf;
             if (depth > 3 && rrBeta < 0.25f) {
                 Float q = std::max<Float>(0, 1 - rrBeta);
                 if (r() < q)
@@ -724,6 +728,7 @@ class LayeredBxDF {
                         phase.Sample_p(-w, Point2f(r(), r()));
                     if (!ps || ps->pdf == 0 || ps->wi.z == 0)
                         return {};
+                    // FIXME: Combine the albedo and reflectance properly!
                     f *= albedo * ps->p;
                     pdf *= ps->pdf;
                     specularPath = false;
@@ -759,6 +764,7 @@ class LayeredBxDF {
             pstd::optional<BSDFSample> bs = interface.Sample_f(-w, uc, u, mode);
             if (!bs || !bs->f || bs->pdf == 0 || bs->wi.z == 0)
                 return {};
+            // FIXME: Multiplication order?
             f *= bs->f;
             pdf *= bs->pdf;
             specularPath &= bs->IsSpecular();
@@ -1130,7 +1136,7 @@ class NormalizedFresnelBxDF {
         if (mode == TransportMode::Radiance)
             f *= Sqr(eta);
 
-        return SampledReflectance(f);
+        return SampledReflectance::FromSpectrum(f);
     }
 
   private:

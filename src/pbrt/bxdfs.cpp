@@ -93,8 +93,7 @@ pstd::optional<BSDFSample> DielectricBxDF::Sample_f(
             // Sample perfect specular dielectric BRDF
             Vector3f wi(-wo.x, -wo.y, wo.z);
             SampledSpectrum fr(R / AbsCosTheta(wi));
-            return BSDFSample(SampledReflectance(fr), wi, pr / (pr + pt),
-                              BxDFFlags::SpecularReflection);
+            return BSDFSample(fr, wi, pr / (pr + pt), BxDFFlags::SpecularReflection);
 
         } else {
             // Sample perfect specular dielectric BTDF
@@ -111,8 +110,7 @@ pstd::optional<BSDFSample> DielectricBxDF::Sample_f(
             if (mode == TransportMode::Radiance)
                 ft /= Sqr(etap);
 
-            return BSDFSample(SampledReflectance(ft), wi, pt / (pr + pt),
-                              BxDFFlags::SpecularTransmission,
+            return BSDFSample(ft, wi, pt / (pr + pt), BxDFFlags::SpecularTransmission,
                               etap);
         }
 
@@ -142,7 +140,7 @@ pstd::optional<BSDFSample> DielectricBxDF::Sample_f(
             DCHECK(!IsNaN(pdf));
             SampledSpectrum f(mfDistrib.D(wm) * mfDistrib.G(wo, wi) * R /
                               (4 * CosTheta(wi) * CosTheta(wo)));
-            return BSDFSample(SampledReflectance(f), wi, pdf, BxDFFlags::GlossyReflection);
+            return BSDFSample(f, wi, pdf, BxDFFlags::GlossyReflection);
 
         } else {
             // Sample transmission at rough dielectric interface
@@ -166,8 +164,7 @@ pstd::optional<BSDFSample> DielectricBxDF::Sample_f(
             if (mode == TransportMode::Radiance)
                 ft /= Sqr(etap);
 
-            return BSDFSample(SampledReflectance(ft), wi, pdf,
-                              BxDFFlags::GlossyTransmission, etap);
+            return BSDFSample(ft, wi, pdf, BxDFFlags::GlossyTransmission, etap);
         }
     }
 }
@@ -195,7 +192,7 @@ SampledReflectance DielectricBxDF::f(Vector3f wo, Vector3f wi, TransportMode mod
     Float F = FrDielectric(Dot(wo, wm), eta);
     if (reflect) {
         // Compute reflection at rough dielectric interface
-        return SampledReflectance(mfDistrib.D(wm) * mfDistrib.G(wo, wi) * F /
+        return SampledReflectance::FromFloat(mfDistrib.D(wm) * mfDistrib.G(wo, wi) * F /
                                std::abs(4 * cosTheta_i * cosTheta_o));
 
     } else {
@@ -207,7 +204,7 @@ SampledReflectance DielectricBxDF::f(Vector3f wo, Vector3f wi, TransportMode mod
         if (mode == TransportMode::Radiance)
             ft /= Sqr(etap);
 
-        return SampledReflectance(ft);
+        return SampledReflectance::FromFloat(ft);
     }
 }
 
@@ -365,7 +362,7 @@ SampledReflectance HairBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode) con
     if (AbsCosTheta(wi) > 0)
         fsum /= AbsCosTheta(wi);
     DCHECK(!IsInf(fsum.Average()) && !IsNaN(fsum.Average()));
-    return SampledReflectance(fsum);
+    return SampledReflectance::FromSpectrum(fsum);
 }
 
 pstd::array<Float, HairBxDF::pMax + 1> HairBxDF::ApPDF(Float cosTheta_o) const {
@@ -1031,7 +1028,7 @@ SampledReflectance MeasuredBxDF::f(Vector3f wo, Vector3f wi, TransportMode mode)
             std::max<Float>(0, brdf->spectra.Evaluate(ui.p, phi_o, theta_o, lambda[i]));
 
     // Return measured BRDF value
-    return SampledReflectance(fr * brdf->ndf.Evaluate(u_wm) /
+    return SampledReflectance::FromSpectrum(fr * brdf->ndf.Evaluate(u_wm) /
            (4 * brdf->sigma.Evaluate(u_wo) * CosTheta(wi)));
 }
 
@@ -1083,7 +1080,7 @@ pstd::optional<BSDFSample> MeasuredBxDF::Sample_f(Vector3f wo, Float uc, Point2f
     if (flipWi)
         wi = -wi;
 
-    return BSDFSample(SampledReflectance(fr), wi, pdf * lum_pdf, BxDFFlags::GlossyReflection);
+    return BSDFSample(fr, wi, pdf * lum_pdf, BxDFFlags::GlossyReflection);
 }
 
 Float MeasuredBxDF::PDF(Vector3f wo, Vector3f wi, TransportMode mode,

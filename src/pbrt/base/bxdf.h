@@ -8,8 +8,8 @@
 #include <pbrt/pbrt.h>
 
 #include <pbrt/util/pstd.h>
-#include <pbrt/util/spectrum.h>
 #include <pbrt/util/reflectance.h>
+#include <pbrt/util/spectrum.h>
 #include <pbrt/util/taggedptr.h>
 #include <pbrt/util/vecmath.h>
 
@@ -53,8 +53,6 @@ enum BxDFFlags {
     Diffuse = 1 << 2,
     Glossy = 1 << 3,
     Specular = 1 << 4,
-    // FIXME: Figure out if we can use this...?
-    // Fluorescent = 1 << 5,
     // Composite _BxDFFlags_ definitions
     DiffuseReflection = Diffuse | Reflection,
     DiffuseTransmission = Diffuse | Transmission,
@@ -125,10 +123,18 @@ struct BSDFSample {
     // BSDFSample Public Methods
     BSDFSample() = default;
     PBRT_CPU_GPU
-    BSDFSample(SampledReflectance f, Vector3f wi, Float pdf, BxDFFlags flags,
-               Float eta = 1,
+    BSDFSample(SampledReflectance f, Vector3f wi, Float pdf, BxDFFlags flags, Float eta = 1,
                bool pdfIsProportional = false)
         : f(f),
+          wi(wi),
+          pdf(pdf),
+          flags(flags),
+          eta(eta),
+          pdfIsProportional(pdfIsProportional) {}
+
+    BSDFSample(SampledSpectrum f, Vector3f wi, Float pdf, BxDFFlags flags,
+               Float eta = 1, bool pdfIsProportional = false)
+        : f(SampledReflectance::FromSpectrum(f)),
           wi(wi),
           pdf(pdf),
           flags(flags),

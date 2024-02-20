@@ -256,8 +256,7 @@ CoatedDiffuseBxDF CoatedDiffuseMaterial::GetBxDF(TextureEvaluator texEval,
                                                  const MaterialEvalContext &ctx,
                                                  SampledWavelengths &lambda) const {
     // Initialize diffuse component of plastic material
-    SampledReflectance r =
-        SampledReflectance(Clamp(texEval(reflectance, ctx, lambda), 0, 1));
+    SampledSpectrum r = Clamp(texEval(reflectance, ctx, lambda), 0, 1);
 
     // Create microfacet distribution _distrib_ for coated diffuse material
     Float urough = texEval(uRoughness, ctx);
