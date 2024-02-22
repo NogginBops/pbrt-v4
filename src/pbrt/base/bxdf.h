@@ -132,6 +132,7 @@ struct BSDFSample {
           eta(eta),
           pdfIsProportional(pdfIsProportional) {}
 
+    PBRT_CPU_GPU
     BSDFSample(SampledSpectrum f, Vector3f wi, Float pdf, BxDFFlags flags,
                Float eta = 1, bool pdfIsProportional = false)
         : f(SampledReflectance::FromSpectrum(f)),

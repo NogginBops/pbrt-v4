@@ -390,7 +390,8 @@ SampledSpectrum SimplePathIntegrator::Li(RayDifferential ray, SampledWavelengths
                                          Sampler sampler, ScratchBuffer &scratchBuffer,
                                          VisibleSurface *) const {
     // Estimate radiance along ray using simple path tracing
-    SampledSpectrum L(0.f), beta(1.f);
+    SampledSpectrum L(0.f);
+    SampledReflectance beta(1.0f);
     bool specularBounce = true;
     int depth = 0;
     while (beta) {
@@ -436,8 +437,9 @@ SampledSpectrum SimplePathIntegrator::Li(RayDifferential ray, SampledWavelengths
                 if (ls && ls->L && ls->pdf > 0) {
                     // Evaluate BSDF for light and possibly add scattered radiance
                     Vector3f wi = ls->wi;
-                    SampledSpectrum f = bsdf.f(wo, wi) * AbsDot(wi, isect.shading.n);
+                    SampledReflectance f = bsdf.f(wo, wi) * AbsDot(wi, isect.shading.n);
                     if (f && Unoccluded(isect, ls->pLight))
+                        // FIXME: Multiplication order?
                         L += beta * f * ls->L / (sampledLight->p * ls->pdf);
                 }
             }
@@ -475,8 +477,9 @@ SampledSpectrum SimplePathIntegrator::Li(RayDifferential ray, SampledWavelengths
             ray = isect.SpawnRay(wi);
         }
 
-        CHECK_GE(beta.y(lambda), 0.f);
-        DCHECK(!IsInf(beta.y(lambda)));
+        // FIXME: Rewrite this check for SampledReflectance
+        //CHECK_GE(beta.y(lambda), 0.f);
+        //DCHECK(!IsInf(beta.y(lambda)));
     }
     return L;
 }
@@ -496,6 +499,8 @@ std::unique_ptr<SimplePathIntegrator> SimplePathIntegrator::Create(
     return std::make_unique<SimplePathIntegrator>(maxDepth, sampleLights, sampleBSDF,
                                                   camera, sampler, aggregate, lights);
 }
+
+#if 0
 
 // LightPathIntegrator Method Definitions
 LightPathIntegrator::LightPathIntegrator(int maxDepth, Camera camera, Sampler sampler,
@@ -3643,42 +3648,44 @@ std::string FunctionIntegrator::ToString() const {
         outputFilename, camera, baseSampler);
 }
 
+#endif
+
 std::unique_ptr<Integrator> Integrator::Create(
     const std::string &name, const ParameterDictionary &parameters, Camera camera,
     Sampler sampler, Primitive aggregate, std::vector<Light> lights,
     const RGBColorSpace *colorSpace, const FileLoc *loc) {
     std::unique_ptr<Integrator> integrator;
-    if (name == "path")
-        integrator =
-            PathIntegrator::Create(parameters, camera, sampler, aggregate, lights, loc);
-    else if (name == "function")
-        integrator = FunctionIntegrator::Create(parameters, camera, sampler, loc);
-    else if (name == "simplepath")
+    //if (name == "path")
+    //    integrator =
+    //        PathIntegrator::Create(parameters, camera, sampler, aggregate, lights, loc);
+    //else if (name == "function")
+    //    integrator = FunctionIntegrator::Create(parameters, camera, sampler, loc);
+    /*else*/ if (name == "simplepath")
         integrator = SimplePathIntegrator::Create(parameters, camera, sampler, aggregate,
                                                   lights, loc);
-    else if (name == "lightpath")
-        integrator = LightPathIntegrator::Create(parameters, camera, sampler, aggregate,
-                                                 lights, loc);
-    else if (name == "simplevolpath")
-        integrator = SimpleVolPathIntegrator::Create(parameters, camera, sampler,
-                                                     aggregate, lights, loc);
-    else if (name == "volpath")
-        integrator = VolPathIntegrator::Create(parameters, camera, sampler, aggregate,
-                                               lights, loc);
-    else if (name == "bdpt")
-        integrator =
-            BDPTIntegrator::Create(parameters, camera, sampler, aggregate, lights, loc);
-    else if (name == "mlt")
-        integrator = MLTIntegrator::Create(parameters, camera, aggregate, lights, loc);
-    else if (name == "ambientocclusion")
-        integrator = AOIntegrator::Create(parameters, &colorSpace->illuminant, camera,
-                                          sampler, aggregate, lights, loc);
+    //else if (name == "lightpath")
+    //    integrator = LightPathIntegrator::Create(parameters, camera, sampler, aggregate,
+    //                                             lights, loc);
+    //else if (name == "simplevolpath")
+    //    integrator = SimpleVolPathIntegrator::Create(parameters, camera, sampler,
+    //                                                 aggregate, lights, loc);
+    //else if (name == "volpath")
+    //    integrator = VolPathIntegrator::Create(parameters, camera, sampler, aggregate,
+    //                                           lights, loc);
+    //else if (name == "bdpt")
+    //    integrator =
+    //        BDPTIntegrator::Create(parameters, camera, sampler, aggregate, lights, loc);
+    //else if (name == "mlt")
+    //    integrator = MLTIntegrator::Create(parameters, camera, aggregate, lights, loc);
+    //else if (name == "ambientocclusion")
+    //    integrator = AOIntegrator::Create(parameters, &colorSpace->illuminant, camera,
+    //                                      sampler, aggregate, lights, loc);
     else if (name == "randomwalk")
         integrator = RandomWalkIntegrator::Create(parameters, camera, sampler, aggregate,
                                                   lights, loc);
-    else if (name == "sppm")
-        integrator = SPPMIntegrator::Create(parameters, colorSpace, camera, sampler,
-                                            aggregate, lights, loc);
+    //else if (name == "sppm")
+    //    integrator = SPPMIntegrator::Create(parameters, colorSpace, camera, sampler,
+    //                                        aggregate, lights, loc);
     else
         ErrorExit(loc, "%s: integrator type unknown.", name);
 

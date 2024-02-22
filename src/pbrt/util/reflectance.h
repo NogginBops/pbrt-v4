@@ -28,12 +28,16 @@ class Reflectance : public TaggedPointer<SpectrumReflectance, FluorescentReflect
 
 class SampledReflectance {
   public:
+    PBRT_CPU_GPU
     SampledReflectance() {}
     // FIXME: Make this parameterized on NSpectrumSamples
+    PBRT_CPU_GPU
     SampledReflectance(float f) { values == SquareMatrix<NSpectrumSamples>::Diag(f, f, f, f); }
+    PBRT_CPU_GPU
     explicit SampledReflectance(SampledSpectrum f) {
-        values == SquareMatrix<NSpectrumSamples>::Diag(f[0], f[1], f[2], f[3]);
+        values = SquareMatrix<NSpectrumSamples>::Diag(f[0], f[1], f[2], f[3]);
     }
+    PBRT_CPU_GPU
     SampledReflectance(SquareMatrix<NSpectrumSamples> m) { values = m; }
 
     PBRT_CPU_GPU
@@ -251,6 +255,8 @@ class FluorescentReflectance {
   private:
     // FIXME: Fluorescence matrix data?
     int lambda_min, lambda_max;
+    // FIXME: Do I need to mark this as GPU data for reemission[inOffset].size() to be
+    // a __host__ __device__ function.
     std::vector<std::vector<Float>> reemission;
 };
 

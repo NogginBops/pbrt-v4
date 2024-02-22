@@ -81,8 +81,9 @@ void WavefrontPathIntegrator::SampleSubsurface(int wavefrontDepth) {
                     bsdf.Sample_f<ConcreteBxDF>(wo, uc, u);
                 if (bsdfSample) {
                     Vector3f wi = bsdfSample->wi;
+                    // FIXME: Use proper reflectance
                     SampledSpectrum beta =
-                        betap * bsdfSample->f * AbsDot(wi, intr.ns) / bsdfSample->pdf;
+                        betap * SampledReflectance::ToSpectrum(bsdfSample->f) * AbsDot(wi, intr.ns) / bsdfSample->pdf;
                     SampledSpectrum indir_r_u = r_u;
 
                     PBRT_DBG("%s f*cos[0] %f bsdfSample->pdf %f f*cos/pdf %f\n",
@@ -161,7 +162,8 @@ void WavefrontPathIntegrator::SampleSubsurface(int wavefrontDepth) {
                     return;
 
                 Vector3f wi = ls->wi;
-                SampledSpectrum f = bsdf.f<ConcreteBxDF>(wo, wi);
+                // FIXME: Use proper reflectance
+                SampledSpectrum f = SampledReflectance::ToSpectrum(bsdf.f<ConcreteBxDF>(wo, wi));
                 if (!f)
                     return;
 

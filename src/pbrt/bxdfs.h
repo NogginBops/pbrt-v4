@@ -546,6 +546,7 @@ class LayeredBxDF {
                     Float q = std::max<Float>(0, 1 - beta.MaxComponentValue());
                     if (r() < q)
                         break;
+                    // FIXME: Do we need to do anything with this?
                     beta = beta / (1 - q);
                     PBRT_DBG("After RR with q = %f, beta: %f %f %f %f\n", q, beta[0],
                              beta[1], beta[2], beta[3]);
@@ -571,7 +572,7 @@ class LayeredBxDF {
                         Float wt = 1;
                         if (!IsSpecular(exitInterface.Flags()))
                             wt = PowerHeuristic(1, wis->pdf, 1, phase.PDF(-w, -wis->wi));
-                        // FIXME: Figure out how we combine reflectance for volumes!
+                        // FIXME: Multiplication order?
                         f += beta * SampledReflectance::FromSpectrum(albedo) * phase.p(-w, -wis->wi) * wt *
                              Tr(zp - exitZ, wis->wi) * wis->f / wis->pdf;
 

@@ -165,12 +165,14 @@ class RandomWalkIntegrator : public RayIntegrator {
         Vector3f wp = SampleUniformSphere(u);
 
         // Evaluate BSDF at surface for sampled direction
-        SampledSpectrum fcos = bsdf.f(wo, wp) * AbsDot(wp, isect.shading.n);
+        SampledReflectance fcos = bsdf.f(wo, wp) * AbsDot(wp, isect.shading.n);
         if (!fcos)
             return Le;
 
         // Recursively trace ray to estimate incident radiance at surface
         ray = isect.SpawnRay(wp);
+        // LiRenderWalk returns incident radiance which we multiply by the reflectance matrix to get
+        // the exitant radiance.
         return Le + fcos * LiRandomWalk(ray, lambda, sampler, scratchBuffer, depth + 1) /
                         (1 / (4 * Pi));
     }
@@ -202,6 +204,8 @@ class SimplePathIntegrator : public RayIntegrator {
     bool sampleLights, sampleBSDF;
     UniformLightSampler lightSampler;
 };
+
+#if 0
 
 // PathIntegrator Definition
 class PathIntegrator : public RayIntegrator {
@@ -500,6 +504,8 @@ class FunctionIntegrator : public Integrator {
     bool skipBad;
     std::string imageFilename;
 };
+
+#endif
 
 }  // namespace pbrt
 

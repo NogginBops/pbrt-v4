@@ -13,6 +13,7 @@
 #include <pbrt/textures.h>
 #include <pbrt/util/check.h>
 #include <pbrt/util/containers.h>
+#include <pbrt/util/reflectance.h>
 #include <pbrt/util/spectrum.h>
 #include <pbrt/util/vecmath.h>
 #include <pbrt/wavefront/integrator.h>
@@ -173,7 +174,8 @@ void WavefrontPathIntegrator::EvaluateMaterialAndBSDF(MaterialEvalQueue *evalQue
                     Point2f(0.756135, 0.731258), Point2f(0.516165, 0.152852),
                     Point2f(0.180888, 0.214174), Point2f(0.898579, 0.503897)};
 
-                SampledSpectrum albedo = bsdf.rho(isect.wo, ucRho, uRho);
+                // FIXME: Use proper reflectance
+                SampledSpectrum albedo = SampledReflectance::ToSpectrum(bsdf.rho(isect.wo, ucRho, uRho));
 
                 pixelSampleState.visibleSurface[w.pixelIndex] =
                     VisibleSurface(isect, albedo, lambda);
@@ -187,8 +189,9 @@ void WavefrontPathIntegrator::EvaluateMaterialAndBSDF(MaterialEvalQueue *evalQue
             if (bsdfSample) {
                 // Compute updated path throughput and PDFs and enqueue indirect ray
                 Vector3f wi = bsdfSample->wi;
+                // FIXME: Use proper reflectance
                 SampledSpectrum beta =
-                    w.beta * bsdfSample->f * AbsDot(wi, ns) / bsdfSample->pdf;
+                    w.beta * SampledReflectance::ToSpectrum(bsdfSample->f) * AbsDot(wi, ns) / bsdfSample->pdf;
                 SampledSpectrum r_u = w.r_u, r_l;
 
                 PBRT_DBG("%s f*cos[0] %f bsdfSample->pdf %f f*cos/pdf %f\n",
@@ -280,7 +283,8 @@ void WavefrontPathIntegrator::EvaluateMaterialAndBSDF(MaterialEvalQueue *evalQue
                 if (!ls || !ls->L || ls->pdf == 0)
                     return;
                 Vector3f wi = ls->wi;
-                SampledSpectrum f = bsdf.f<ConcreteBxDF>(wo, wi);
+                // FIXME: Use proper reflectance
+                SampledSpectrum f = SampledReflectance::ToSpectrum(bsdf.f<ConcreteBxDF>(wo, wi));
                 if (!f)
                     return;
 
