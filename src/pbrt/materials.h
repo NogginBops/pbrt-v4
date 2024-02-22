@@ -475,6 +475,60 @@ class DiffuseMaterial {
     SpectrumTexture reflectance;
 };
 
+
+// DiffuseMaterial Definition
+class DiffuseFluorescentMaterial {
+  public:
+    // DiffuseMaterial Type Definitions
+    using BxDF = FluorescentBxDF;
+    using BSSRDF = void;
+
+    // DiffuseMaterial Public Methods
+    static const char *Name() { return "DiffuseFluorescentMaterial"; }
+
+    PBRT_CPU_GPU
+    FloatTexture GetDisplacement() const { return displacement; }
+    PBRT_CPU_GPU
+    const Image *GetNormalMap() const { return normalMap; }
+
+    static DiffuseFluorescentMaterial *Create(
+        const TextureParameterDictionary &parameters,
+                                   Image *normalMap, const FileLoc *loc, Allocator alloc);
+
+    template <typename TextureEvaluator>
+    PBRT_CPU_GPU void GetBSSRDF(TextureEvaluator texEval, MaterialEvalContext ctx,
+                                SampledWavelengths &lambda, void *) const {}
+
+    PBRT_CPU_GPU static constexpr bool HasSubsurfaceScattering() { return false; }
+
+    std::string ToString() const;
+
+    DiffuseFluorescentMaterial(Reflectance reflectance, FloatTexture displacement, Image *normalMap)
+        : normalMap(normalMap), displacement(displacement), reflectance(reflectance) {}
+
+    template <typename TextureEvaluator>
+    PBRT_CPU_GPU bool CanEvaluateTextures(TextureEvaluator texEval) const {
+        return false;
+    }
+
+    template <typename TextureEvaluator>
+    PBRT_CPU_GPU FluorescentBxDF GetBxDF(TextureEvaluator texEval, MaterialEvalContext ctx,
+                                     SampledWavelengths &lambda) const {
+        //SampledSpectrum r = Clamp(texEval(reflectance, ctx, lambda), 0, 1);
+
+        SampledReflectance r = reflectance.Sample(lambda);
+        FluorescentBxDF b(r);
+        return b;
+    }
+
+  private:
+    // DiffuseMaterial Private Members
+    Image *normalMap;
+    FloatTexture displacement;
+    Reflectance reflectance;
+};
+
+
 // ConductorMaterial Definition
 class ConductorMaterial {
   public:

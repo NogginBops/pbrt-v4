@@ -12,6 +12,7 @@
 #include <pbrt/util/error.h>
 #include <pbrt/util/memory.h>
 #include <pbrt/util/pstd.h>
+#include <pbrt/util/reflectance.h>
 #include <pbrt/util/spectrum.h>
 #include <pbrt/util/vecmath.h>
 
@@ -62,6 +63,7 @@ enum class ParameterType {
     Vector3f,
     Normal3f,
     Spectrum,
+    Reflectance,
     String,
     Texture
 };
@@ -153,6 +155,11 @@ class ParameterDictionary {
     Spectrum GetOneSpectrum(const std::string &name, Spectrum def,
                             SpectrumType spectrumType, Allocator alloc) const;
 
+    Reflectance ParameterDictionary::GetOneReflectance(const std::string &name,
+                                                       Reflectance defaultValue,
+                                                       SpectrumType spectrumType,
+                                                       Allocator alloc) const;
+
     std::vector<Float> GetFloatArray(const std::string &name) const;
     std::vector<int> GetIntArray(const std::string &name) const;
     std::vector<uint8_t> GetBoolArray(const std::string &name) const;
@@ -190,6 +197,10 @@ class ParameterDictionary {
                                                SpectrumType spectrumType,
                                                Allocator alloc) const;
 
+    std::vector<Reflectance> extractReflectanceArray(const ParsedParameter &param,
+                                               SpectrumType spectrumType,
+                                               Allocator alloc) const;
+
     void remove(const std::string &name, const char *typeName);
     void checkParameterTypes();
     static std::string ToParameterDefinition(const ParsedParameter *p, int indentCount);
@@ -219,6 +230,10 @@ class TextureParameterDictionary {
     Normal3f GetOneNormal3f(const std::string &name, Normal3f def) const;
     Spectrum GetOneSpectrum(const std::string &name, Spectrum def,
                             SpectrumType spectrumType, Allocator alloc) const;
+    Reflectance TextureParameterDictionary::GetOneReflectance(const std::string &name,
+                                                              Reflectance def,
+                                                              SpectrumType spectrumType,
+                                                              Allocator alloc) const;
     std::string GetOneString(const std::string &name, const std::string &def) const;
 
     std::vector<Float> GetFloatArray(const std::string &name) const;

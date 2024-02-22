@@ -13,6 +13,7 @@
 #include <pbrt/util/file.h>
 #include <pbrt/util/memory.h>
 #include <pbrt/util/print.h>
+#include <pbrt/util/reflectance.h>
 #include <pbrt/util/spectrum.h>
 
 #include <algorithm>
@@ -180,7 +181,7 @@ void ParameterDictionary::checkParameterTypes() {
                     "\"%s\": non-numeric values provided for numeric-valued parameter",
                     p->name);
         } else if (p->type == ParameterTypeTraits<ParameterType::String>::typeName ||
-                   p->type == "texture") {
+                   p->type == "texture" || p->type == "bfc") {
             if (p->strings.empty())
                 ErrorExit(
                     &p->loc,
@@ -284,6 +285,24 @@ Spectrum ParameterDictionary::GetOneSpectrum(const std::string &name,
     }
 
     return defaultValue;
+}
+
+Reflectance ParameterDictionary::GetOneReflectance(const std::string &name,
+                                                Reflectance defaultValue,
+                                                SpectrumType spectrumType,
+                                                   Allocator alloc) const {
+    for (const ParsedParameter *p : params) {
+        if (p->name != name)
+            continue;
+
+        std::vector<Reflectance> s = extractReflectanceArray(*p, spectrumType, alloc);
+        if (!s.empty()) {
+            if (s.size() > 1)
+                ErrorExit(&p->loc, "More than one value provided for parameter \"%s\"", name);
+
+            return s[0];
+        }
+    }
 }
 
 std::string ParameterDictionary::GetOneString(const std::string &name,
@@ -465,6 +484,23 @@ std::vector<Spectrum> ParameterDictionary::GetSpectrumArray(const std::string &n
         if (!s.empty())
             return s;
     }
+    return {};
+}
+
+std::vector<Reflectance> ParameterDictionary::extractReflectanceArray(
+    const ParsedParameter& param, SpectrumType spectrumType, Allocator alloc) const {
+    if (param.type == "bfc" && !param.strings.empty()) {
+        return returnArray<Reflectance>(
+            param.strings, param, 1,
+            [param, &alloc](const std::string *s, const FileLoc *loc) -> Reflectance {
+                Reflectance refl = GetNamedReflectance(*s);
+                if (refl)
+                    return refl;
+
+                ErrorExit(&param.loc, "%s: not a recognized reflectance name", *s);
+            });
+    }
+
     return {};
 }
 
@@ -745,6 +781,13 @@ Spectrum TextureParameterDictionary::GetOneSpectrum(const std::string &name, Spe
                                                     SpectrumType spectrumType,
                                                     Allocator alloc) const {
     return dict->GetOneSpectrum(name, def, spectrumType, alloc);
+}
+
+Reflectance TextureParameterDictionary::GetOneReflectance(const std::string &name,
+                                                          Reflectance def,
+                                                    SpectrumType spectrumType,
+                                                    Allocator alloc) const {
+    return dict->GetOneReflectance(name, def, spectrumType, alloc);
 }
 
 std::string TextureParameterDictionary::GetOneString(const std::string &name,

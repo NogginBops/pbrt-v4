@@ -192,6 +192,9 @@ PBRT_CPU_GPU inline SampledReflectance operator*(Float s, const SampledReflectan
 
 class SpectrumReflectance {
   public:
+    PBRT_CPU_GPU
+    SpectrumReflectance(Spectrum s) : spectrum(s) {}
+
       // FIXME: Do we need to normalize 
     PBRT_CPU_GPU
     Float operator()(Float lambdaIn, Float lambdaOut) const { return lambdaIn == lambdaOut ? spectrum(lambdaIn) : 0.0f; }
@@ -210,8 +213,47 @@ class SpectrumReflectance {
     Spectrum spectrum;
 };
 
+struct ReflectanceMatrixInfo {
+  public:
+    float InputStart, InputEnd, InputInterval;
+    int InputN;
+    float OutputStart, OutputEnd, OutputInterval;
+    int OutputN;
+};
+
 class FluorescentReflectance {
   public:
+
+    PBRT_CPU_GPU
+    FluorescentReflectance() : reemission() {};
+
+    PBRT_CPU_GPU
+    static FluorescentReflectance* FromFloats(pstd::span<const Float> samples,
+                                              ReflectanceMatrixInfo info,
+                                              Allocator alloc)
+    {
+        FluorescentReflectance* reflectance = alloc.new_object<FluorescentReflectance>();
+
+        // FIXME:
+        int rows = info.InputN;
+        int cols = info.OutputN;
+
+        DCHECK(rows == 41 && cols == 49);
+
+        reflectance->reemission.resize(41);
+        for (int i = 0; i < rows; i++) {
+            reflectance->reemission[i].resize(41);
+        }
+
+        for (int i = 0; i < rows; i++) {
+            for (int j = 8; j < cols; j++) {
+                reflectance->reemission[i][j-8] = samples[i * cols + j];
+            }
+        }
+
+        return reflectance;
+    }
+
     PBRT_CPU_GPU
     Float operator()(Float lambdaIn, Float lambdaOut) const {
         // For now we will do bilinear interpolation of the reflectance matrix
@@ -269,6 +311,12 @@ inline SampledReflectance Reflectance::Sample(const SampledWavelengths &lambda) 
     auto op = [&](auto ptr) { return ptr->Sample(lambda); };
     return Dispatch(op);
 }
+
+namespace Reflectances {
+void Init(Allocator alloc);
+} // namespace Reflectances
+
+Reflectance GetNamedReflectance(std::string name);
 
 } // namespace pbrt
 

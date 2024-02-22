@@ -62,6 +62,9 @@ std::string ToString(TransportMode mode) {
 std::string DiffuseBxDF::ToString() const {
     return StringPrintf("[ DiffuseBxDF R: %s ]", R);
 }
+std::string FluorescentBxDF::ToString() const {
+    return StringPrintf("[ FluorescentBxDF R: %s ]", R);
+}
 std::string DiffuseTransmissionBxDF::ToString() const {
     return StringPrintf("[ DiffuseTransmissionBxDF R: %s T: %s ]", R, T);
 }

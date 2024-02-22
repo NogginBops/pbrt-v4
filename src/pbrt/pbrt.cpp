@@ -19,6 +19,7 @@
 #include <pbrt/util/memory.h>
 #include <pbrt/util/parallel.h>
 #include <pbrt/util/print.h>
+#include <pbrt/util/reflectance.h>
 #include <pbrt/util/spectrum.h>
 #include <pbrt/util/stats.h>
 
@@ -103,6 +104,7 @@ void InitPBRT(const PBRTOptions &opt) {
         Allocator alloc(bufferResource);
         ColorEncoding::Init(alloc);
         Spectra::Init(alloc);
+        Reflectances::Init(alloc);
         RGBToSpectrumTable::Init(alloc);
 
         RGBColorSpace::Init(alloc);
@@ -115,6 +117,7 @@ void InitPBRT(const PBRTOptions &opt) {
         ColorEncoding::Init(Allocator{});
         // Before RGBColorSpace::Init!
         Spectra::Init(Allocator{});
+        Reflectances::Init(Allocator{});
         RGBToSpectrumTable::Init(Allocator{});
 
         RGBColorSpace::Init(Allocator{});

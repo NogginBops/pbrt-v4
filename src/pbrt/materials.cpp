@@ -204,6 +204,29 @@ DiffuseMaterial *DiffuseMaterial::Create(const TextureParameterDictionary &param
     return alloc.new_object<DiffuseMaterial>(reflectance, displacement, normalMap);
 }
 
+// DiffuseFluorescentMaterial Method Definitions
+std::string DiffuseFluorescentMaterial::ToString() const {
+    return StringPrintf(
+        "[ DiffuseFluorescentMaterial displacement: %s normapMap: %s reflectance: %s ]",
+        displacement, normalMap ? normalMap->ToString() : std::string("(nullptr)"),
+        reflectance);
+}
+
+DiffuseFluorescentMaterial *DiffuseFluorescentMaterial::Create(
+    const TextureParameterDictionary &parameters,
+                                         Image *normalMap, const FileLoc *loc,
+                                         Allocator alloc) {
+    Reflectance reflectance = parameters.GetOneReflectance("reflectance", nullptr, SpectrumType::Albedo, alloc);
+    if (!reflectance)
+        reflectance = alloc.new_object<SpectrumReflectance>(
+            alloc.new_object<ConstantSpectrum>(0.5f));
+    
+    FloatTexture displacement = parameters.GetFloatTextureOrNull("displacement", alloc);
+
+    return alloc.new_object<DiffuseFluorescentMaterial>(reflectance, displacement,
+                                                        normalMap);
+}
+
 // ConductorMaterial Method Definitions
 std::string ConductorMaterial::ToString() const {
     return StringPrintf("[ ConductorMaterial displacement: %s normalMap: %s eta: %s "
@@ -643,6 +666,8 @@ Material Material::Create(const std::string &name,
         return nullptr;
     else if (name == "diffuse")
         material = DiffuseMaterial::Create(parameters, normalMap, loc, alloc);
+    else if (name == "fluorescent")
+        material = DiffuseFluorescentMaterial::Create(parameters, normalMap, loc, alloc);
     else if (name == "coateddiffuse")
         material = CoatedDiffuseMaterial::Create(parameters, normalMap, loc, alloc);
     else if (name == "coatedconductor")

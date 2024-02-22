@@ -81,6 +81,61 @@ class DiffuseBxDF {
     SampledSpectrum R;
 };
 
+// FluorescentBxDF Definition
+class FluorescentBxDF {
+  public:
+    // DiffuseBxDF Public Methods
+    FluorescentBxDF() = default;
+    PBRT_CPU_GPU
+    FluorescentBxDF(const SampledReflectance R) : R(R) {}
+
+    PBRT_CPU_GPU
+    SampledReflectance f(Vector3f wo, Vector3f wi, TransportMode mode) const {
+        if (!SameHemisphere(wo, wi))
+            return SampledReflectance(0.f);
+        return R * InvPi;
+    }
+
+    PBRT_CPU_GPU
+    pstd::optional<BSDFSample> Sample_f(
+        Vector3f wo, Float uc, Point2f u, TransportMode mode,
+        BxDFReflTransFlags sampleFlags = BxDFReflTransFlags::All) const {
+        if (!(sampleFlags & BxDFReflTransFlags::Reflection))
+            return {};
+        // Sample cosine-weighted hemisphere to compute _wi_ and _pdf_
+        Vector3f wi = SampleCosineHemisphere(u);
+        if (wo.z < 0)
+            wi.z *= -1;
+        Float pdf = CosineHemispherePDF(AbsCosTheta(wi));
+
+        return BSDFSample(R * InvPi, wi, pdf, BxDFFlags::DiffuseReflection);
+    }
+
+    PBRT_CPU_GPU
+    Float PDF(Vector3f wo, Vector3f wi, TransportMode mode,
+              BxDFReflTransFlags sampleFlags = BxDFReflTransFlags::All) const {
+        if (!(sampleFlags & BxDFReflTransFlags::Reflection) || !SameHemisphere(wo, wi))
+            return 0;
+        return CosineHemispherePDF(AbsCosTheta(wi));
+    }
+
+    PBRT_CPU_GPU
+    static constexpr const char *Name() { return "FluorescentBxDF"; }
+
+    std::string ToString() const;
+
+    PBRT_CPU_GPU
+    void Regularize() {}
+
+    PBRT_CPU_GPU
+    BxDFFlags Flags() const {
+        return R ? BxDFFlags::DiffuseReflection : BxDFFlags::Unset;
+    }
+
+  private:
+    SampledReflectance R;
+};
+
 // DiffuseTransmissionBxDF Definition
 class DiffuseTransmissionBxDF {
   public:
